@@ -1,0 +1,38 @@
+[project]
+name = "story-sandbox"
+version = "0.1.0"
+description = "Autonomous story generation sandbox for Claude Code. Characters develop on their own, world self-heals, output to Obsidian vault."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [
+    { name = "story-sandbox contributors" },
+]
+keywords = ["claude", "mcp", "story", "novel", "obsidian", "sandbox", "writing"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Text Processing :: Markup :: Markdown",
+]
+dependencies = [
+    "mcp>=1.0.0",
+]
+
+[project.scripts]
+story-sandbox = "story_sandbox.server:main"
+
+[project.urls]
+Homepage = "https://github.com/houyuhang/story-sandbox"
+Repository = "https://github.com/houyuhang/story-sandbox"
+Issues = "https://github.com/houyuhang/story-sandbox/issues"
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
