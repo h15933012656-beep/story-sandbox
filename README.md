@@ -99,33 +99,159 @@ When a character encounters an undefined location or concept, the system automat
 | A (arc) | 10-20 rounds | Mid-level mysteries resolved per arc |
 | B (scene) | 3-5 rounds | Small hooks for immediate engagement |
 
-## Obsidian output
+---
+
+## Obsidian integration
+
+The sandbox outputs everything directly into an Obsidian vault. Open the vault in Obsidian and the story comes alive with interactive visualization.
+
+### Required plugins
+
+| Plugin | Required | Purpose |
+|--------|----------|---------|
+| **Dataview** | Yes | Powers the status dashboard (character states, scene timeline, foreshadowing tracker) |
+| **Canvas** | Built-in | Story map with characters, locations, and relationships |
+| **Graph View** | Built-in | Relationship network between characters and locations |
+
+Install Dataview from Settings → Community Plugins → Browse → search "Dataview" → Install → Enable.
+
+### Vault structure
 
 ```
 your-vault/
-├── 00-世界观/          World docs (auto-expanded)
-├── 01-角色/            Character sheets (updated each round)
-├── 02-场景/
-│   ├── 01-第一章/      Scenes organized by chapter
+├── 00-世界观/                  World documents
+│   ├── 世界总览.md             World overview (era, rule, conflict, mood)
+│   ├── 核心规则.md             Core rule of this world
+│   ├── 核心冲突.md             Core conflict
+│   ├── 地点/                   Locations (auto-created as characters explore)
+│   │   ├── 渊城/               City → district → specific location
+│   │   │   ├── 老城区/
+│   │   │   │   └── 默记书店.md
+│   │   │   └── 中心区/
+│   │   │       └── 档案馆.md
+│   │   └── 南昌/
+│   │       └── 养老社区.md
+│   ├── 组织/                   Organizations
+│   ├── 规则/                   World rules
+│   └── 历史/                   Historical events
+│
+├── 01-角色/                    Character sheets (updated every round)
+│   ├── 林默.md                 Frontmatter: mood, relationships, round_updated
+│   ├── 苏晴.md                 Body: personality, background, memory log, growth
 │   └── ...
-├── 03-时间线/          Timeline index
-├── 04-关系图/          Relationship cards (one per character)
-├── 05-状态面板/        Dataview dashboard
-├── 06-画布/            Canvas story map
+│
+├── 02-场景/                    Scenes organized by chapter
+│   ├── 01-第一章/
+│   │   ├── S001-雨夜来客.md    Each scene: narrative + structured data
+│   │   ├── S002-南郊旧影.md
+│   │   └── ...
+│   ├── 02-第二章/
+│   └── ...
+│
+├── 03-时间线/
+│   └── 时间线.md               Full timeline by chapter
+│
+├── 04-关系图/
+│   └── 关系索引.md             One card per character with relationship details
+│
+├── 05-状态面板/
+│   └── 面板.md                 Dataview dashboard (auto-refreshing)
+│
+├── 06-画布/
+│   └── 故事全景.canvas         Canvas story map
+│
 ├── 07-素材导出/
-│   └── 小说正文/       Novel chapters (01-xxx.md, 02-xxx.md)
-└── sandbox-state.json
+│   └── 小说正文/               Compiled novel chapters
+│       ├── 01-旧地图.md
+│       ├── 02-拼图.md
+│       └── ...
+│
+└── sandbox-state.json          Machine-readable state (characters, foreshadowing, etc.)
 ```
 
-### Graph View colors
+### Graph View
 
-| Color | Category |
-|-------|----------|
-| Green | Characters |
-| Orange | Locations |
-| Purple | World rules |
+The Graph View shows **characters and locations only** (scenes excluded to prevent clutter). Color-coded:
 
-Scenes are excluded from Graph View to prevent clutter.
+| Color | Category | Example |
+|-------|----------|---------|
+| Green | Characters | Lin Mo, Su Qing, Chen Wei |
+| Orange | Locations | Bookstore, Archive, Safe house |
+| Purple | World rules | Ability cost, Core rule |
+
+Characters connect to locations they visit, and to other characters through wikilinks. The graph updates automatically as the story develops.
+
+### Dataview dashboard
+
+The `05-状态面板/面板.md` file contains auto-refreshing Dataview queries:
+
+- **Character status table** — mood, cause, last updated round for each character
+- **Recent scenes** — last 10 scenes with round number, location, and emotional arc
+- **World documents** — all world-building docs with type and creation round
+
+### Relationship cards
+
+The `04-关系图/关系索引.md` file uses a per-character card format (not a matrix):
+
+```markdown
+## Lin Mo
+
+- **Su Qing** — 75 trust. Alliance partner, both investigated the corruption together.
+- **Chen Wei** — -30 hostile. Confirmed as the one who blocked his identity.
+- **Fang Yuan** — 40 cooperation. Met secretly at Half-Cup Teahouse.
+
+## Relationship timeline
+
+### Lin Mo <-> Su Qing: from strangers to allies
+Round 1 stranger → Round 2 testing → Round 11 alliance → Round 15 fighting together
+```
+
+### Canvas story map
+
+The `06-画布/故事全景.canvas` file creates an interactive story map:
+
+- **Character nodes** (top) — color-coded by alignment (blue=protagonist, red=antagonist, yellow=gray)
+- **Location nodes** (bottom) — all significant places
+- **Edges** — labeled with relationship values ("alliance 75", "hostile -30")
+- **Story overview node** — current arc and progress
+
+Open the canvas file in Obsidian to drag, zoom, and explore the story structure.
+
+### Scene files
+
+Each scene file in `02-场景/` contains:
+
+```markdown
+---
+type: scene
+round: 5
+title: "深夜来电"
+date: "2026-06-20"
+location: "[[默记书店]]"
+characters: ["[[林默]]", "[[苏晴]]"]
+emotional_arc: "平静 -> 紧张 -> 释放"
+tags: [scene, "轮次/5"]
+---
+
+# S005 - 深夜来电
+
+## 场景正文
+{200-800 word narrative}
+
+## 结构化数据
+### 关键事件
+- Event 1
+- Event 2
+### 关系变化
+- [[林默]] <-> [[苏晴]]：信任加深（亲密度 +10）
+### 伏笔
+- 新增：...
+- 回收：...
+```
+
+All wikilinks (`[[...]]`) create connections in Graph View automatically.
+
+---
 
 ## Example
 
@@ -151,7 +277,7 @@ After 50 rounds of autonomous development:
 
 - Python 3.10+
 - Claude Code or Claude Desktop
-- Obsidian (with Dataview plugin for dashboard)
+- Obsidian with [Dataview](https://github.com/blacksmithgu/obsidian-dataview) plugin
 
 ## License
 
