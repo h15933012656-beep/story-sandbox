@@ -16,7 +16,7 @@ from mcp.types import Tool, TextContent
 
 from .utils.state import SandboxState
 from .utils.obsidian import ObsidianWriter
-from .utils.templates import load_template
+from .utils.templates import load_template, load_genre_template
 
 # ---------------------------------------------------------------------------
 # Server setup
@@ -49,6 +49,12 @@ async def list_tools() -> list[Tool]:
                 "type": "object",
                 "properties": {
                     "vault_path": {"type": "string", "description": "Absolute path to the Obsidian vault directory"},
+                    "genre": {
+                        "type": "string",
+                        "enum": ["xuanhuan", "xianxia", "urban", "scifi", "fantasy", "horror", "custom"],
+                        "description": "Story genre preset (default: custom). Loads genre-specific default values for core_rule and narrative style.",
+                        "default": "custom",
+                    },
                     "world": {
                         "type": "object",
                         "properties": {
@@ -79,8 +85,16 @@ async def list_tools() -> list[Tool]:
                     "secret": {"type": "string", "description": "Something they hide; revelation would change the plot"},
                     "initial_relationships": {
                         "type": "object",
-                        "additionalProperties": {"type": "integer"},
-                        "description": "Map of character_name -> affinity (-100 to 100)",
+                        "additionalProperties": {
+                            "type": "object",
+                            "properties": {
+                                "trust": {"type": "integer", "description": "信任度 (-100 to 100)"},
+                                "affection": {"type": "integer", "description": "好感度 (-100 to 100)"},
+                                "rivalry": {"type": "integer", "description": "竞争度 (-100 to 100)"},
+                                "fear": {"type": "integer", "description": "畏惧度 (-100 to 100)"},
+                            },
+                        },
+                        "description": "Map of character_name -> {trust?, affection?, rivalry?, fear?}",
                     },
                 },
                 "required": ["vault_path", "name", "gender", "personality", "background", "motive", "secret"],
@@ -120,10 +134,34 @@ async def list_tools() -> list[Tool]:
                             "properties": {
                                 "from_char": {"type": "string"},
                                 "to_char": {"type": "string"},
-                                "delta": {"type": "integer"},
+                                "delta": {
+                                    "description": "Integer (legacy -> affection) or object {trust?, affection?, rivalry?, fear?}",
+                                    "oneOf": [
+                                        {"type": "integer"},
+                                        {
+                                            "type": "object",
+                                            "properties": {
+                                                "trust": {"type": "integer"},
+                                                "affection": {"type": "integer"},
+                                                "rivalry": {"type": "integer"},
+                                                "fear": {"type": "integer"},
+                                            },
+                                        },
+                                    ],
+                                },
                                 "reason": {"type": "string"},
                             },
                         },
+                    },
+                    "quality": {
+                        "type": "object",
+                        "description": "Scene quality scores, e.g. {pacing: 8, dialogue: 7, tension: 9, overall: 8}",
+                        "additionalProperties": {"type": "number"},
+                    },
+                    "scene_type": {
+                        "type": "string",
+                        "enum": ["action", "dialogue", "transition", "climax", "opening", "ending", "flashback"],
+                        "description": "Scene type for balance tracking",
                     },
                     "foreshadowing_add": {"type": "array", "items": {"type": "string"}},
                     "foreshadowing_resolve": {"type": "array", "items": {"type": "string"}},
@@ -199,6 +237,32 @@ async def list_tools() -> list[Tool]:
                 "required": ["vault_path"],
             },
         ),
+        Tool(
+            name="sandbox_set_budget",
+            description="Set or update budget metadata (e.g. target_words, daily_quota, deadline). Stores in sandbox-state.json metadata.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "vault_path": {"type": "string"},
+                    "target_words": {"type": "integer", "description": "Total target word count for the novel"},
+                    "daily_quota": {"type": "integer", "description": "Daily writing quota in words"},
+                    "deadline": {"type": "string", "description": "Deadline date (YYYY-MM-DD)"},
+                    "chapter_budget": {"type": "integer", "description": "Target word count per chapter"},
+                },
+                "required": ["vault_path"],
+            },
+        ),
+        Tool(
+            name="sandbox_get_budget",
+            description="Get current budget status: target, progress, remaining words, and daily pacing.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "vault_path": {"type": "string"},
+                },
+                "required": ["vault_path"],
+            },
+        ),
     ]
 
 
@@ -225,6 +289,10 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
             return await _handle_check_consistency(arguments)
         elif name == "sandbox_export":
             return await _handle_export(arguments)
+        elif name == "sandbox_set_budget":
+            return await _handle_set_budget(arguments)
+        elif name == "sandbox_get_budget":
+            return await _handle_get_budget(arguments)
         else:
             return _err(f"Unknown tool: {name}")
     except Exception as e:
@@ -239,9 +307,17 @@ async def _handle_init(args: dict) -> list[TextContent]:
     vault = Path(args["vault_path"])
     world = args["world"]
     target = args.get("target_chapters", 30)
+    genre = args.get("genre", "custom")
 
     writer = ObsidianWriter(vault)
     writer.create_vault_structure()
+
+    # Apply genre preset defaults if genre is not custom
+    if genre != "custom":
+        preset = load_genre_template(genre)
+        if preset:
+            for key, default_val in preset.get("world_defaults", {}).items():
+                world.setdefault(key, default_val)
 
     # Write world overview
     writer.write_world_overview(world)
@@ -253,6 +329,8 @@ async def _handle_init(args: dict) -> list[TextContent]:
     # Initialize state
     state = SandboxState(vault)
     state.init(world, target)
+    if genre != "custom":
+        state.metadata["genre"] = genre
     state.save()
 
     # Write graph config
@@ -261,7 +339,11 @@ async def _handle_init(args: dict) -> list[TextContent]:
     # Write dashboard
     writer.write_dashboard()
 
-    return _ok(f"Sandbox initialized at {vault}", {"target_chapters": target, "world": world})
+    return _ok(f"Sandbox initialized at {vault}", {
+        "target_chapters": target,
+        "genre": genre,
+        "world": world,
+    })
 
 
 # ---------------------------------------------------------------------------
@@ -316,6 +398,9 @@ async def _handle_write_scene(args: dict) -> list[TextContent]:
     title = args["title"]
     narrative = args["narrative"]
     characters = args["characters"]
+    quality = args.get("quality")
+    scene_type = args.get("scene_type")
+    rel_changes = args.get("relationship_changes", [])
 
     # Write scene file
     scene_file = writer.write_scene(
@@ -327,10 +412,14 @@ async def _handle_write_scene(args: dict) -> list[TextContent]:
         emotional_arc=args.get("emotional_arc", ""),
         narrative=narrative,
         key_events=args.get("key_events", []),
+        relationship_changes=rel_changes,
+        quality=quality,
+        scene_type=scene_type,
+        has_foreshadowing=bool(args.get("foreshadowing_add")),
     )
 
     # Update character files
-    for change in args.get("relationship_changes", []):
+    for change in rel_changes:
         state.update_relationship(change["from_char"], change["to_char"], change["delta"])
 
     # Update character moods and memories
@@ -352,8 +441,10 @@ async def _handle_write_scene(args: dict) -> list[TextContent]:
 
     # Update state
     state.current_round = round_num
-    state.add_scene_history(round_num, title, characters, args.get("location", ""))
+    state.add_scene_history(round_num, title, characters, args.get("location", ""),
+                            quality=quality, scene_type=scene_type)
     state.increment_inactivity()
+    state.archive_old_memories(round_num)
     state.save()
 
     return _ok(f"Scene S{round_num:03d}-{title} written", {"file": scene_file, "round": round_num})
@@ -417,6 +508,63 @@ async def _handle_export(args: dict) -> list[TextContent]:
 
     export_dir = writer.export_novel(state)
     return _ok(f"Novel exported to {export_dir}")
+
+
+# ---------------------------------------------------------------------------
+# Budget
+# ---------------------------------------------------------------------------
+
+async def _handle_set_budget(args: dict) -> list[TextContent]:
+    vault = Path(args["vault_path"])
+    state = SandboxState(vault)
+
+    for key in ("target_words", "daily_quota", "deadline", "chapter_budget"):
+        if key in args:
+            state.metadata[key] = args[key]
+    state.save()
+
+    return _ok("Budget updated", {"budget": {
+        k: state.metadata[k]
+        for k in ("target_words", "daily_quota", "deadline", "chapter_budget")
+        if k in state.metadata
+    }})
+
+
+async def _handle_get_budget(args: dict) -> list[TextContent]:
+    vault = Path(args["vault_path"])
+    state = SandboxState(vault)
+
+    budget = {
+        k: state.metadata[k]
+        for k in ("target_words", "daily_quota", "deadline", "chapter_budget")
+        if k in state.metadata
+    }
+
+    # Compute current word count from scene history
+    total_words = 0
+    for scene in state._data.get("sceneHistory", []):
+        q = scene.get("quality") or {}
+        wc = q.get("word_count", 0)
+        if wc:
+            total_words += wc
+
+    progress = {
+        "current_round": state.current_round,
+        "total_words": total_words,
+        "scenes_written": len(state._data.get("sceneHistory", [])),
+    }
+
+    if budget.get("target_words"):
+        progress["percent"] = round(total_words / budget["target_words"] * 100, 1)
+        progress["remaining_words"] = budget["target_words"] - total_words
+
+    if budget.get("daily_quota") and budget.get("target_words"):
+        remaining = budget["target_words"] - total_words
+        if remaining > 0 and budget["daily_quota"] > 0:
+            import math
+            progress["estimated_days_left"] = math.ceil(remaining / budget["daily_quota"])
+
+    return _ok("Budget retrieved", {"budget": budget, "progress": progress})
 
 
 # ---------------------------------------------------------------------------

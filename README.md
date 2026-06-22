@@ -63,14 +63,16 @@ Claude will guide you through:
 
 | Tool | Description |
 |------|-------------|
-| `sandbox_init` | Initialize vault with directory structure and world docs |
-| `sandbox_add_character` | Add a character with personality, background, secret |
+| `sandbox_init` | Initialize vault with directory structure and world docs (supports `genre` preset) |
+| `sandbox_add_character` | Add a character with personality, background, secret, multi-dimensional relationships |
 | `sandbox_get_state` | Read current sandbox state (characters, foreshadowing, scenes) |
-| `sandbox_write_scene` | Write a scene file and update character states |
+| `sandbox_write_scene` | Write a scene file and update character states (supports quality scores and scene type) |
 | `sandbox_compile_chapter` | Compile scenes into a novel chapter |
 | `sandbox_update_graph` | Update Obsidian Canvas with character-location relationships |
 | `sandbox_check_consistency` | Scan for naming conflicts, timeline issues, relationship drift |
 | `sandbox_export` | Export materials for story-long-write integration |
+| `sandbox_set_budget` | Set writing budget (target words, daily quota, deadline) |
+| `sandbox_get_budget` | Get current writing progress and budget status |
 
 ## How it works
 
@@ -186,7 +188,9 @@ Characters connect to locations they visit, and to other characters through wiki
 The `05-状态面板/面板.md` file contains auto-refreshing Dataview queries:
 
 - **Character status table** — mood, cause, last updated round for each character
-- **Recent scenes** — last 10 scenes with round number, location, and emotional arc
+- **Relationship matrix** — multi-dimensional relationship data for all characters
+- **Recent scenes** — last 10 scenes with round number, location, emotional arc, scene type, and quality score
+- **Foreshadowing tracker** — all scenes that planted foreshadowing
 - **World documents** — all world-building docs with type and creation round
 
 ### Relationship cards

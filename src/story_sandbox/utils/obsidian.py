@@ -109,11 +109,22 @@ tags: [world, location]
 
     def write_character(self, name: str, gender: str, personality: list,
                         background: str, motive: str, secret: str,
-                        relationships: dict | None = None):
+                        relationships: dict | None = None,
+                        traits: dict | None = None):
         rel_lines = ""
-        if relationships:
-            for other, val in relationships.items():
-                rel_lines += f"- [[{other}]]（亲密度：{val}）\n"
+        for other, val in (relationships or {}).items():
+            if isinstance(val, dict):
+                dims = []
+                for dim, v in val.items():
+                    if v:
+                        dims.append(f"{dim}:{v}")
+                rel_lines += f"- [[{other}]]（{' / '.join(dims) if dims else '中立'}）\n"
+            else:
+                rel_lines += f"- [[{other}]]（好感：{val}）\n"
+
+        traits_lines = ""
+        for k, v in (traits or {}).items():
+            traits_lines += f"  {k}: \"{v}\"\n"
 
         content = f"""---
 type: character
@@ -123,7 +134,9 @@ mood: "平静"
 mood_cause: "初始状态"
 round_updated: 0
 relationships:
-{self._yaml_dict(relationships or {})}
+{self._yaml_nested(relationships or {})}
+traits:
+{traits_lines or '  {}'}
 tags: [character, "mood/平静"]
 ---
 
@@ -154,11 +167,40 @@ tags: [character, "mood/平静"]
 
     def write_scene(self, round: int, title: str, date: str, location: str,
                     characters: list, emotional_arc: str, narrative: str,
-                    key_events: list) -> str:
+                    key_events: list,
+                    relationship_changes: list | None = None,
+                    quality: dict | None = None,
+                    scene_type: str | None = None,
+                    has_foreshadowing: bool = False) -> str:
         """Write a scene file and return its path."""
         filename = f"S{round:03d}-{title}.md"
         char_list = "\n".join(f'  - "[[{c}]]"' for c in characters)
         events = "\n".join(f"- {e}" for e in key_events) if key_events else "- （待补充）"
+
+        quality_overall = quality.get("overall", "") if quality else ""
+        scene_type_line = f'\nscene_type: "{scene_type}"' if scene_type else ""
+        quality_line = f'\nquality_overall: "{quality_overall}"' if quality_overall else ""
+
+        rel_changes_lines = ""
+        if relationship_changes:
+            for ch in relationship_changes:
+                fr = ch.get("from_char", "")
+                to = ch.get("to_char", "")
+                delta = ch.get("delta", {})
+                reason = ch.get("reason", "")
+                if isinstance(delta, dict):
+                    dims = " / ".join(f"{k}:{v}" for k, v in delta.items() if v)
+                else:
+                    dims = f"好感:{delta}"
+                rel_changes_lines += f"- [[{fr}]] → [[{to}]]：{dims}（{reason}）\n"
+
+        quality_section = ""
+        if quality:
+            q_parts = []
+            for k, v in quality.items():
+                if k != "overall":
+                    q_parts.append(f"- {k}：{v}")
+            quality_section = "\n### 质量评分\n" + "\n".join(q_parts) + f"\n- 综合：{quality.get('overall', 'N/A')}\n"
 
         content = f"""---
 type: scene
@@ -169,6 +211,7 @@ location: "[[{location}]]"
 characters:
 {char_list}
 emotional_arc: "{emotional_arc}"
+has_foreshadowing: {str(has_foreshadowing).lower()}{scene_type_line}{quality_line}
 tags: [scene, "轮次/{round}"]
 ---
 
@@ -182,7 +225,10 @@ tags: [scene, "轮次/{round}"]
 
 ### 关键事件
 {events}
-"""
+
+### 关系变化
+{rel_changes_lines or '（无）'}
+{quality_section}"""
         filepath = self.vault / "02-场景" / filename
         filepath.write_text(content, encoding="utf-8")
         return str(filepath)
@@ -330,6 +376,17 @@ WHERE type = "character"
 SORT name ASC
 ```
 
+## 关系矩阵
+
+```dataview
+TABLE WITHOUT ID
+  file.link AS "角色",
+  relationships AS "关系数据"
+FROM "01-角色"
+WHERE type = "character"
+SORT name ASC
+```
+
 ## 最近场景
 
 ```dataview
@@ -337,11 +394,25 @@ TABLE WITHOUT ID
   file.link AS "场景",
   round AS "轮次",
   location AS "地点",
-  emotional_arc AS "情绪弧"
+  emotional_arc AS "情绪弧",
+  scene_type AS "类型",
+  quality_overall AS "质量"
 FROM "02-场景"
 WHERE type = "scene"
 SORT round DESC
 LIMIT 10
+```
+
+## 伏笔追踪
+
+```dataview
+TABLE WITHOUT ID
+  file.link AS "场景",
+  round AS "轮次",
+  has_foreshadowing AS "含伏笔"
+FROM "02-场景"
+WHERE type = "scene" AND has_foreshadowing = true
+SORT round DESC
 ```
 
 ## 世界观文档
@@ -405,6 +476,20 @@ SORT type ASC
         for k, v in d.items():
             lines.append(f'  "{k}": {v}')
         return "\n".join(lines) if lines else "  {}"
+
+    @staticmethod
+    def _yaml_nested(d: dict, indent: int = 2) -> str:
+        """Render a dict as nested YAML. Supports dicts of dicts."""
+        prefix = " " * indent
+        lines = []
+        for k, v in d.items():
+            if isinstance(v, dict):
+                lines.append(f'{prefix}"{k}":')
+                for dk, dv in v.items():
+                    lines.append(f'{prefix}  {dk}: {dv}')
+            else:
+                lines.append(f'{prefix}"{k}": {v}')
+        return "\n".join(lines) if lines else f"{prefix}{{}}"
 
 
 def _cn(n: int) -> str:

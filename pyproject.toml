@@ -1,6 +1,6 @@
 [project]
 name = "story-sandbox"
-version = "0.1.0"
+version = "0.2.0"
 description = "Autonomous story generation sandbox for Claude Code. Characters develop on their own, world self-heals, output to Obsidian vault."
 readme = "README.md"
 license = "MIT"
